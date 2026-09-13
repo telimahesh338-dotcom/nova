@@ -1,0 +1,83 @@
+name: Build Android APK
+
+on:
+  push:
+    branches:
+      - main
+      - master
+  pull_request:
+    branches:
+      - main
+      - master
+  workflow_dispatch: # Allows manual 1-click trigger from GitHub Actions tab
+
+jobs:
+  build:
+    name: Generate Android APK
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: 📥 Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: 🟢 Setup Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: ☕ Setup Java (JDK 17)
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'zulu'
+          java-version: '17'
+
+      - name: 🤖 Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: 📦 Install NPM Dependencies
+        run: |
+          npm ci || npm install
+
+      - name: 🔨 Build Web Application (Vite)
+        run: |
+          npm run build
+
+      - name: 📱 Setup Capacitor Android Platform
+        run: |
+          if [ ! -d "android" ]; then
+            npx cap add android
+          fi
+          npx cap sync android
+
+      - name: 🎙️ Ensure Microphone & Network Permissions in AndroidManifest
+        run: |
+          MANIFEST="android/app/src/main/AndroidManifest.xml"
+          if [ -f "$MANIFEST" ]; then
+            # Inject permissions before </manifest> if not already present
+            if ! grep -q "RECORD_AUDIO" "$MANIFEST"; then
+              sed -i '/<\/manifest>/i \    <uses-permission android:name="android.permission.RECORD_AUDIO" />\n    <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />' "$MANIFEST"
+            fi
+            if ! grep -q "INTERNET" "$MANIFEST"; then
+              sed -i '/<\/manifest>/i \    <uses-permission android:name="android.permission.INTERNET" />' "$MANIFEST"
+            fi
+          fi
+
+      - name: 🔑 Grant Execute Permission to Gradle Wrapper
+        run: |
+          if [ -f "android/gradlew" ]; then
+            chmod +x android/gradlew
+          fi
+
+      - name: 🚀 Build Debug APK with Gradle
+        working-directory: ./android
+        run: |
+          ./gradlew assembleDebug --stacktrace
+
+      - name: 📤 Upload APK Artifact (Download from GitHub Actions)
+        uses: actions/upload-artifact@v4
+        with:
+          name: Nova-AI-Voice-Assistant-Debug-APK
+          path: android/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+          retention-days: 30

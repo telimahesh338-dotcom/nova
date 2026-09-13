@@ -1,24 +1,57 @@
+import React, { useState } from 'react';
 import VoiceAssistant from '@/components/VoiceAssistant';
+import { FilesView } from '@/components/FilesView';
+import { EditingView } from '@/components/EditingView';
+import { TerminalView } from '@/components/TerminalView';
+import { BottomNavigation } from '@/components/BottomNavigation';
+import { ActiveTab } from '@/types';
 
 const Index = () => {
+  const [activeTab, setActiveTab] = useState<ActiveTab>('home');
+  const [editingFilePath, setEditingFilePath] = useState<string>('src/App.tsx');
+
+  const handleOpenFileInEditor = (filePath: string) => {
+    setEditingFilePath(filePath);
+    setActiveTab('editing');
+  };
+
   return (
-    <div className="min-h-screen w-full bg-background">
-      <a href="#nova-assistant" className="skip-link">
-        Skip to Nova assistant
+    <div className="min-h-screen w-full bg-background text-foreground flex flex-col relative">
+      <a href="#main-content" className="skip-link">
+        Skip to main content
       </a>
-      <main id="nova-assistant">
-        <VoiceAssistant />
+
+      {/* Main Tab Views */}
+      <main id="main-content" className="flex-1 w-full relative">
+        {/* Home view - kept mounted so voice assistant state and streams are preserved */}
+        <div className={activeTab === 'home' ? 'block' : 'hidden'}>
+          <VoiceAssistant />
+        </div>
+
+        {/* Files view */}
+        {activeTab === 'files' && (
+          <div className="animate-fade-in">
+            <FilesView onOpenFileInEditor={handleOpenFileInEditor} />
+          </div>
+        )}
+
+        {/* Editing view */}
+        {activeTab === 'editing' && (
+          <div className="animate-fade-in">
+            <EditingView initialFilePath={editingFilePath} />
+          </div>
+        )}
+
+        {/* Terminal view */}
+        {activeTab === 'terminal' && (
+          <div className="animate-fade-in">
+            <TerminalView />
+          </div>
+        )}
       </main>
 
-      {/* Screen-reader description */}
-      <div className="sr-only">
-        <h1>Nova Voice Assistant</h1>
-        <p>
-          Click the blob or type in the text input to interact. Works in English, Arabic, and French.
-          Say &ldquo;Speak Arabic&rdquo; to switch to Arabic, &ldquo;Speak French&rdquo; to switch to French,
-          or use the language selector in the top-right corner.
-        </p>
-      </div>
+      {/* Persistent Bottom Navigation Bar across all tabs */}
+      <BottomNavigation activeTab={activeTab} onTabChange={setActiveTab} />
     </div>
   );
 };

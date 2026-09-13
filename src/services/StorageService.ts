@@ -4,7 +4,76 @@
  */
 
 const STORAGE_KEY = 'nova_messages';
+const LANG_STORAGE_KEY = 'nova_language';
+const VOICE_PERSONA_KEY = 'nova_voice_persona';
+const VOICE_SPEED_KEY = 'nova_voice_speed';
 const MAX_STORED_MESSAGES = 200;
+
+export type SupportedLanguage = 'en-US' | 'ar-LB' | 'fr-FR' | 'kn-IN';
+export type VoicePersona = 'female' | 'male';
+
+export function loadLanguage(): SupportedLanguage {
+  try {
+    const raw = localStorage.getItem(LANG_STORAGE_KEY);
+    if (raw === 'kn-IN' || raw === 'en-US' || raw === 'ar-LB' || raw === 'fr-FR') {
+      return raw as SupportedLanguage;
+    }
+  } catch {
+    // ignore
+  }
+  return 'kn-IN';
+}
+
+export function saveLanguage(lang: SupportedLanguage): void {
+  try {
+    localStorage.setItem(LANG_STORAGE_KEY, lang);
+  } catch (e) {
+    console.warn('Failed to save language to localStorage:', e);
+  }
+}
+
+export function loadVoicePersona(): VoicePersona {
+  try {
+    const raw = localStorage.getItem(VOICE_PERSONA_KEY);
+    if (raw === 'female' || raw === 'male') {
+      return raw;
+    }
+  } catch {
+    // ignore
+  }
+  return 'female'; // Default to clear natural female voice
+}
+
+export function saveVoicePersona(persona: VoicePersona): void {
+  try {
+    localStorage.setItem(VOICE_PERSONA_KEY, persona);
+  } catch (e) {
+    console.warn('Failed to save voice persona:', e);
+  }
+}
+
+export function loadVoiceSpeed(): number {
+  try {
+    const raw = localStorage.getItem(VOICE_SPEED_KEY);
+    if (raw) {
+      const parsed = parseFloat(raw);
+      if (!isNaN(parsed) && parsed >= 0.8 && parsed <= 1.5) {
+        return parsed;
+      }
+    }
+  } catch {
+    // ignore
+  }
+  return 1.08; // Fast, snappy default
+}
+
+export function saveVoiceSpeed(speed: number): void {
+  try {
+    localStorage.setItem(VOICE_SPEED_KEY, speed.toString());
+  } catch (e) {
+    console.warn('Failed to save voice speed:', e);
+  }
+}
 
 export interface StoredMessage {
   role: 'user' | 'assistant';

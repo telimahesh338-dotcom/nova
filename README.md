@@ -181,6 +181,26 @@ Say **"Hey Nova"** or **"Nova"** followed by your question to activate hands-fre
 
 ---
 
+## 📱 Building Android APK via GitHub Actions
+
+This repository includes a ready-to-run GitHub Actions workflow (`.github/workflows/build-apk.yml`) that builds an installable Android APK (`app-debug.apk`) directly in GitHub's cloud without needing Android Studio or local Java setup:
+
+1. **Push to GitHub**:
+   ```bash
+   git add .
+   git commit -m "Nova AI Android build"
+   git push origin main
+   ```
+2. **Automated Cloud Build**:
+   - The workflow triggers automatically on push to `main`/`master`, or manually via **Actions > Build Android APK > Run workflow**.
+   - It sets up Node 20, Java 17, Android SDK, builds the Vite web assets, synchronizes with Capacitor, and compiles the Android APK via Gradle.
+3. **Download & Install**:
+   - Once the action completes with a green checkmark (✔️), open the run summary.
+   - Under the **Artifacts** section, click **Nova-AI-Voice-Assistant-Debug-APK** to download the zip file.
+   - Unzip and install `app-debug.apk` directly on your Android device!
+
+---
+
 <div align="center">
 
 [Live Demo](https://n0v0.netlify.app/)

@@ -1,5 +1,7 @@
 import express, { Request, Response } from "express";
 import path from "path";
+import fs from "fs";
+import { exec } from "child_process";
 import { createServer as createViteServer } from "vite";
 import { GoogleGenAI } from "@google/genai";
 
@@ -16,28 +18,28 @@ interface ProxyRequestBody {
   history?: HistoryMessage[];
 }
 
+const STRICT_KANNADA_SYSTEM_PROMPT =
+  "ನೀವು ನೋವಾ (Nova) ಎಂಬ ಅತ್ಯಂತ ಬುದ್ಧಿವಂತ ಮತ್ತು ವೇಗದ AI ಧ್ವನಿ ಸಹಾಯಕ.\n" +
+  "ಅತ್ಯುನ್ನತ ಕಡ್ಡಾಯ ನಿಯಮ (Strict Mandatory Rule): ನೀವು ಯಾವಾಗಲೂ ಮತ್ತು ಪ್ರತಿಯೊಂದು ಪ್ರಶ್ನೆಗೂ ಕೇವಲ ಕನ್ನಡದಲ್ಲೇ (ಕನ್ನಡ ಲಿಪಿಯಲ್ಲಿ) ಉತ್ತರಿಸಬೇಕು (ONLY KANNADA REPLIES).\n" +
+  "ಧ್ವನಿ ಸಂಭಾಷಣೆಗೆ ಸೂಕ್ತವಾಗುವಂತೆ ಉತ್ತರಗಳು ನೇರವಾಗಿ, ಸಂಕ್ಷಿಪ್ತವಾಗಿ (ಸಾಮಾನ್ಯವಾಗಿ 1-3 ವಾಕ್ಯಗಳಲ್ಲಿ), ಹಾಗೂ ಸ್ಪಷ್ಟವಾದ ಸುಲಭ ಕನ್ನಡದಲ್ಲಿರಬೇಕು. ಯಾವುದೇ ಮುನ್ನುಡಿ, ಅತಿ ಉದ್ದದ ಪಟ್ಟಿ ಅಥವಾ ಅನಗತ್ಯ ಪೀಠಿಕೆ ನೀಡಬೇಡಿ.\n" +
+  "ಬಳಕೆದಾರರು ಇಂಗ್ಲಿಷ್‌ನಲ್ಲಿ ಕೇಳಲಿ, ಕಂಗ್ಲಿಷ್‌ನಲ್ಲಿ ಬರೆದಿರಲಿ, ಅಥವಾ ಬೇರೆ ಯಾವುದೇ ಭಾಷೆಯಲ್ಲಿ ಕೇಳಿದರೂ ಸರಿ — ನಿಮ್ಮ ಪ್ರತ್ಯುತ್ತರವು 100% ಕಡ್ಡಾಯವಾಗಿ ಕನ್ನಡ ಲಿಪಿ ಮತ್ತು ನೈಸರ್ಗಿಕ ಕನ್ನಡ ಭಾಷೆಯಲ್ಲೇ ಇರಬೇಕು.";
+
 const SYSTEM_MESSAGES: Record<SupportedLanguage, string> = {
-  "kn-IN":
-    "ನೀವು ನೋವಾ (Nova) ಎಂಬ ಬುದ್ಧಿವಂತ AI ಧ್ವನಿ ಸಹಾಯಕ. ಎಲ್ಲಾ ಪ್ರಶ್ನೆಗಳಿಗೆ ಸರಳ, ನಿಖರ ಮತ್ತು ಸ್ಪಷ್ಟ ಕನ್ನಡದಲ್ಲಿ ನೇರವಾಗಿ ಉತ್ತರಿಸಿ. ಯಾವುದೇ ಮುನ್ನುಡಿ ಅಥವಾ ಅನಗತ್ಯ ಪೀಠಿಕೆ ನೀಡಬೇಡಿ. ಸಂಕ್ಷಿಪ್ತ ಹಾಗೂ ನಿಖರ ಮಾಹಿತಿ ಮಾತ್ರ ನೀಡಿ.",
-  "ar-LB":
-    "أنت مساعد شخصي ذكي اسمه نوفا. أجب بشكل مباشر على الأسئلة بدون مقدمات أو أسئلة توضيحية. قدم معلومات مختصرة ودقيقة فقط.",
-  "fr-FR":
-    "Vous êtes un assistant personnel intelligent nommé Nova. Répondez directement aux questions sans introduction et sans poser de questions de clarification. Soyez concis et précis.",
-  "en-US":
-    "You are an intelligent personal assistant named Nova. Answer questions directly without introductions or asking clarifying questions back. Be concise and accurate. If the user writes or asks in Kannada (ಕನ್ನಡ), reply in fluent, natural Kannada script.",
+  "kn-IN": STRICT_KANNADA_SYSTEM_PROMPT,
+  "en-US": STRICT_KANNADA_SYSTEM_PROMPT,
+  "ar-LB": STRICT_KANNADA_SYSTEM_PROMPT,
+  "fr-FR": STRICT_KANNADA_SYSTEM_PROMPT,
 };
 
-function getLocalizedErrorMessage(language: SupportedLanguage): string {
-  switch (language) {
-    case "kn-IN":
-      return "ಕ್ಷಮಿಸಿ, ಸಿಸ್ಟಮ್ ಪ್ರಸ್ತುತ ಕಾರ್ಯನಿರತವಾಗಿದೆ. ದಯವಿಟ್ಟು ಸ್ವಲ್ಪ ಸಮಯದ ನಂತರ ಮತ್ತೆ ಪ್ರಯತ್ನಿಸಿ.";
-    case "ar-LB":
-      return "عذراً، النظام مشغول حالياً. يرجى المحاولة مرة أخرى بعد قليل.";
-    case "fr-FR":
-      return "Désolé, le système est actuellement occupé. Veuillez réessayer dans un moment.";
-    default:
-      return "Sorry, the system is currently busy. Please try again in a moment.";
+function getLocalizedErrorMessage(language?: SupportedLanguage): string {
+  if (language === "ar-LB") {
+    return "عذراً، النظام مشغول حالياً. يرجى المحاولة مرة أخرى بعد قليل.";
   }
+  if (language === "fr-FR") {
+    return "Désolé, le système est actuellement occupé. Veuillez réessayer dans un moment.";
+  }
+  // Default to Kannada
+  return "ಕ್ಷಮಿಸಿ, ಸಿಸ್ಟಮ್ ಪ್ರಸ್ತುತ ಕಾರ್ಯನಿರತವಾಗಿದೆ. ದಯವಿಟ್ಟು ಸ್ವಲ್ಪ ಸಮಯದ ನಂತರ ಮತ್ತೆ ಪ್ರಯತ್ನಿಸಿ.";
 }
 
 // In-memory rate limiting
@@ -79,6 +81,103 @@ function getAIClient(): GoogleGenAI {
     throw new Error("GEMINI_API_KEY environment variable is not set");
   }
   return new GoogleGenAI({ apiKey });
+}
+
+// Candidate models in order of priority:
+// 1. "gemini-3.8-flash" (preferred model requested by user)
+// 2. "gemini-2.5-flash" (resilient fallback if 3.8-flash experiences temporary 503 spikes)
+// 3. "gemini-flash-latest" (additional fallback)
+const CANDIDATE_MODELS = [
+  "gemini-3.8-flash",
+  "gemini-2.5-flash",
+  "gemini-flash-latest",
+];
+
+async function streamWithModelFallback(
+  ai: GoogleGenAI,
+  contents: Array<{ role: string; parts: Array<{ text: string }> }>,
+  systemInstruction: string,
+  onChunk: (text: string) => void
+): Promise<void> {
+  let lastError: unknown;
+
+  for (let i = 0; i < CANDIDATE_MODELS.length; i++) {
+    const model = CANDIDATE_MODELS[i];
+    let chunkCount = 0;
+    try {
+      const responseStream = await ai.models.generateContentStream({
+        model,
+        contents,
+        config: {
+          systemInstruction,
+          temperature: 0.7,
+        },
+      });
+
+      for await (const chunk of responseStream) {
+        const text = chunk.text;
+        if (text) {
+          chunkCount++;
+          onChunk(text);
+        }
+      }
+      return;
+    } catch (err: unknown) {
+      lastError = err;
+      const errMsg = err instanceof Error ? err.message : String(err);
+      console.warn(`[AI Stream] Model ${model} encountered an issue (chunks sent: ${chunkCount}):`, errMsg);
+
+      // If text has already been emitted to the client, we cannot seamlessly restart
+      // without duplicating content, so rethrow.
+      if (chunkCount > 0) {
+        throw err;
+      }
+
+      // If initial connection failed (e.g. 503 high demand), wait briefly and try next model
+      if (i < CANDIDATE_MODELS.length - 1) {
+        await new Promise((r) => setTimeout(r, 250));
+      }
+    }
+  }
+
+  throw lastError;
+}
+
+async function generateWithModelFallback(
+  ai: GoogleGenAI,
+  contents: Array<{ role: string; parts: Array<{ text: string }> }>,
+  systemInstruction: string
+): Promise<string> {
+  let lastError: unknown;
+
+  for (let i = 0; i < CANDIDATE_MODELS.length; i++) {
+    const model = CANDIDATE_MODELS[i];
+    try {
+      const response = await ai.models.generateContent({
+        model,
+        contents,
+        config: {
+          systemInstruction,
+          temperature: 0.7,
+        },
+      });
+
+      const responseText = response.text?.trim() || "";
+      if (responseText) {
+        return responseText;
+      }
+    } catch (err: unknown) {
+      lastError = err;
+      const errMsg = err instanceof Error ? err.message : String(err);
+      console.warn(`[AI] Model ${model} encountered an issue:`, errMsg);
+
+      if (i < CANDIDATE_MODELS.length - 1) {
+        await new Promise((r) => setTimeout(r, 250));
+      }
+    }
+  }
+
+  throw lastError;
 }
 
 function buildContents(query: string, history?: HistoryMessage[]) {
@@ -129,7 +228,7 @@ async function startServer() {
 
     const body = req.body as ProxyRequestBody;
     const query = body?.query?.trim();
-    const language = body?.language || "en-US";
+    const language = body?.language || "kn-IN";
     const history = body?.history;
 
     if (!query) {
@@ -153,26 +252,14 @@ async function startServer() {
 
     try {
       const ai = getAIClient();
-      const responseStream = await ai.models.generateContentStream({
-        model: "gemini-2.5-flash",
-        contents,
-        config: {
-          systemInstruction,
-          temperature: 0.7,
-        },
+      await streamWithModelFallback(ai, contents, systemInstruction, (text) => {
+        res.write(`data: ${JSON.stringify({ text })}\n\n`);
       });
-
-      for await (const chunk of responseStream) {
-        const text = chunk.text;
-        if (text) {
-          res.write(`data: ${JSON.stringify({ text })}\n\n`);
-        }
-      }
 
       res.write("data: [DONE]\n\n");
       res.end();
     } catch (error) {
-      console.error("[AI Stream] Error:", error);
+      console.error("[AI Stream] All candidate models failed:", error);
       const fallbackText = getLocalizedErrorMessage(language);
       res.write(`data: ${JSON.stringify({ text: fallbackText })}\n\n`);
       res.write("data: [DONE]\n\n");
@@ -192,7 +279,7 @@ async function startServer() {
 
     const body = req.body as ProxyRequestBody;
     const query = body?.query?.trim();
-    const language = body?.language || "en-US";
+    const language = body?.language || "kn-IN";
     const history = body?.history;
 
     if (!query) {
@@ -215,22 +302,14 @@ async function startServer() {
 
     try {
       const ai = getAIClient();
-      const response = await ai.models.generateContent({
-        model: "gemini-2.5-flash",
-        contents,
-        config: {
-          systemInstruction,
-          temperature: 0.7,
-        },
-      });
+      const responseText = await generateWithModelFallback(ai, contents, systemInstruction);
 
-      const responseText = response.text?.trim() || "";
       res.json({
         responseText,
         language,
       });
     } catch (error) {
-      console.error("[AI] Error:", error);
+      console.error("[AI] All candidate models failed:", error);
       res.status(502).json({
         error: true,
         responseText: getLocalizedErrorMessage(language),
@@ -241,6 +320,198 @@ async function startServer() {
 
   app.post("/api/ai", handleNonStreaming);
   app.post("/.netlify/functions/ai", handleNonStreaming);
+
+  // --- Workspace Files API ---
+  app.get("/api/workspace/files", (_req: Request, res: Response) => {
+    try {
+      const rootDir = process.cwd();
+      const ignoredDirs = new Set(["node_modules", "dist", ".git", ".next", ".cache"]);
+      const ignoredFiles = new Set(["bun.lock", "package-lock.json", ".DS_Store"]);
+
+      interface FileEntry {
+        path: string;
+        name: string;
+        isDirectory: boolean;
+        size: number;
+        modified: number;
+        extension: string;
+      }
+
+      const results: FileEntry[] = [];
+
+      function scanDir(currentDir: string, depth = 0) {
+        if (depth > 5) return;
+        let entries: fs.Dirent[];
+        try {
+          entries = fs.readdirSync(currentDir, { withFileTypes: true });
+        } catch {
+          return;
+        }
+
+        for (const entry of entries) {
+          if (entry.name.startsWith(".") && entry.name !== ".env.example") continue;
+          const fullPath = path.join(currentDir, entry.name);
+          const relativePath = path.relative(rootDir, fullPath);
+
+          if (entry.isDirectory()) {
+            if (ignoredDirs.has(entry.name)) continue;
+            results.push({
+              path: relativePath,
+              name: entry.name,
+              isDirectory: true,
+              size: 0,
+              modified: 0,
+              extension: "",
+            });
+            scanDir(fullPath, depth + 1);
+          } else if (entry.isFile()) {
+            if (ignoredFiles.has(entry.name)) continue;
+            try {
+              const stat = fs.statSync(fullPath);
+              const ext = path.extname(entry.name).replace(".", "").toLowerCase();
+              results.push({
+                path: relativePath,
+                name: entry.name,
+                isDirectory: false,
+                size: stat.size,
+                modified: stat.mtimeMs,
+                extension: ext,
+              });
+            } catch {
+              // skip unreadable file
+            }
+          }
+        }
+      }
+
+      scanDir(rootDir);
+      results.sort((a, b) => {
+        if (a.isDirectory && !b.isDirectory) return -1;
+        if (!a.isDirectory && b.isDirectory) return 1;
+        return a.path.localeCompare(b.path);
+      });
+
+      res.json({ files: results });
+    } catch (err) {
+      console.error("[Workspace API] Error listing files:", err);
+      res.status(500).json({ error: "Failed to list workspace files" });
+    }
+  });
+
+  app.get("/api/workspace/file", (req: Request, res: Response) => {
+    try {
+      const filePath = req.query.path as string;
+      if (!filePath) {
+        res.status(400).json({ error: "File path is required" });
+        return;
+      }
+
+      const rootDir = process.cwd();
+      const resolved = path.resolve(rootDir, filePath);
+      if (!resolved.startsWith(rootDir)) {
+        res.status(403).json({ error: "Access denied" });
+        return;
+      }
+
+      if (!fs.existsSync(resolved) || fs.statSync(resolved).isDirectory()) {
+        res.status(404).json({ error: "File not found" });
+        return;
+      }
+
+      // Read max 2MB
+      const stat = fs.statSync(resolved);
+      if (stat.size > 2 * 1024 * 1024) {
+        res.status(413).json({ error: "File too large (max 2MB)" });
+        return;
+      }
+
+      const content = fs.readFileSync(resolved, "utf-8");
+      res.json({
+        path: filePath,
+        name: path.basename(filePath),
+        content,
+        size: stat.size,
+        modified: stat.mtimeMs,
+      });
+    } catch (err) {
+      console.error("[Workspace API] Error reading file:", err);
+      res.status(500).json({ error: "Failed to read file" });
+    }
+  });
+
+  app.post("/api/workspace/file", (req: Request, res: Response) => {
+    try {
+      const { path: filePath, content } = req.body;
+      if (!filePath || typeof content !== "string") {
+        res.status(400).json({ error: "Valid path and content required" });
+        return;
+      }
+
+      const rootDir = process.cwd();
+      const resolved = path.resolve(rootDir, filePath);
+      if (!resolved.startsWith(rootDir)) {
+        res.status(403).json({ error: "Access denied" });
+        return;
+      }
+
+      const dir = path.dirname(resolved);
+      if (!fs.existsSync(dir)) {
+        fs.mkdirSync(dir, { recursive: true });
+      }
+
+      fs.writeFileSync(resolved, content, "utf-8");
+      const stat = fs.statSync(resolved);
+
+      res.json({
+        success: true,
+        path: filePath,
+        size: stat.size,
+        modified: stat.mtimeMs,
+      });
+    } catch (err) {
+      console.error("[Workspace API] Error saving file:", err);
+      res.status(500).json({ error: "Failed to save file" });
+    }
+  });
+
+  // --- Terminal Command Execution API ---
+  app.post("/api/terminal/exec", (req: Request, res: Response) => {
+    const { command } = req.body;
+    if (!command || typeof command !== "string" || !command.trim()) {
+      res.status(400).json({ error: "Command required" });
+      return;
+    }
+
+    const trimmed = command.trim();
+    // Safety filter: prevent destructive recursive deletions or fork bombs
+    if (trimmed.includes("rm -rf /") || trimmed.includes(":(){ :|:& };:")) {
+      res.json({
+        stdout: "",
+        stderr: "ಆಜ್ಞೆಯನ್ನು ನಿಷೇಧಿಸಲಾಗಿದೆ (Command blocked for safety reasons).",
+        exitCode: 1,
+      });
+      return;
+    }
+
+    const startTime = Date.now();
+    exec(
+      trimmed,
+      {
+        cwd: process.cwd(),
+        timeout: 15000,
+        maxBuffer: 1024 * 512,
+      },
+      (error, stdout, stderr) => {
+        const executionTime = Date.now() - startTime;
+        res.json({
+          stdout: stdout || "",
+          stderr: stderr || (error ? error.message : ""),
+          exitCode: error ? (error.code ?? 1) : 0,
+          executionTime,
+        });
+      }
+    );
+  });
 
   // Vite middleware in development vs static file serving in production
   if (process.env.NODE_ENV !== "production") {
