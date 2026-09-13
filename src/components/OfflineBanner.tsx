@@ -8,6 +8,7 @@ const OFFLINE_TEXT: Record<string, string> = {
   'en-US': "You're offline — responses unavailable",
   'ar-LB': 'أنت غير متصل — الردود غير متاحة',
   'fr-FR': 'Vous êtes hors ligne — réponses indisponibles',
+  'kn-IN': 'ನೀವು ಆಫ್‌ಲೈನ್‌ನಲ್ಲಿದ್ದೀರಿ — ಪ್ರತಿಕ್ರಿಯೆಗಳು ಲಭ್ಯವಿಲ್ಲ',
 };
 
 const OfflineBanner: React.FC<OfflineBannerProps> = ({ language = 'en-US' }) => {

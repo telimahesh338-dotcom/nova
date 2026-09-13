@@ -1,4 +1,4 @@
-import React, { useRef, useEffect, useCallback } from 'react';
+import React, { useRef, useEffect } from 'react';
 import * as THREE from 'three';
 
 // Types for the blob state and props
@@ -320,7 +320,6 @@ const BlobVisualization: React.FC<BlobProps> = ({
         container.removeChild(renderer.domElement);
       }
     };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); // mount-only
 
   // --- Update shader uniforms when state / amplitude change (NO scene rebuild) ---

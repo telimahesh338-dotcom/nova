@@ -1,4 +1,4 @@
-export type SupportedLanguage = 'en-US' | 'ar-LB' | 'fr-FR';
+export type SupportedLanguage = 'en-US' | 'ar-LB' | 'fr-FR' | 'kn-IN';
 
 interface SpeechRecognitionResult {
   text: string;
@@ -90,12 +90,18 @@ class SpeechService {
       if (this.isWakeWordMode && result.isFinal) {
         const lower = transcript.toLowerCase();
         const novaIdx = lower.indexOf('nova');
-        if (novaIdx !== -1) {
+        const knNovaIdx = transcript.indexOf('ನೋವಾ');
+        if (novaIdx !== -1 || knNovaIdx !== -1) {
           // Stop wake word listening — main flow takes over
           this.stopWakeWordListening();
 
-          // Extract anything after "nova" as the query
-          const afterNova = transcript.slice(novaIdx + 4).replace(/^[\s,.:]+/, '').trim();
+          // Extract anything after "nova" or "ನೋವಾ" as the query
+          let afterNova = '';
+          if (novaIdx !== -1) {
+            afterNova = transcript.slice(novaIdx + 4).replace(/^[\s,.:]+/, '').trim();
+          } else {
+            afterNova = transcript.slice(knNovaIdx + 4).replace(/^[\s,.:]+/, '').trim();
+          }
           this.onWakeWordCallback?.(afterNova.length >= 2 ? afterNova : null);
         }
         return;
@@ -275,7 +281,7 @@ class SpeechService {
    */
   private splitIntoSentences(text: string): string[] {
     // Match sequences ending with sentence-ending punctuation + optional whitespace
-    const sentences = text.match(/[^.!?؟。]+[.!?؟。]+[\s]*/g);
+    const sentences = text.match(/[^.!?؟।॥\n]+[.!?؟।॥\n]+[\s]*/g);
     if (!sentences) return [text];
 
     // If there's leftover text without terminal punctuation, add it
@@ -326,12 +332,16 @@ class SpeechService {
         'Amélie', 'Google français Female', 'Microsoft Julie',
         'Audrey', 'Marie', 'Jolie', 'fr-FR-Standard-A', 'fr-FR-Standard-C',
       ],
+      'kn-IN': [
+        'Google ಕನ್ನಡ', 'Kannada', 'kn-IN', 'kn', 'Microsoft Gagan', 'Microsoft Sapna',
+      ],
     };
 
     const languageFallbacks: Record<SupportedLanguage, string[]> = {
       'ar-LB': ['ar', 'ar-SA', 'ar-EG'],
       'fr-FR': ['fr-CA', 'fr'],
       'en-US': ['en-GB', 'en'],
+      'kn-IN': ['kn', 'kn-IN', 'hi-IN', 'hi', 'en-IN'],
     };
 
     const matchesLang = (voice: SpeechSynthesisVoice, code: string): boolean =>
@@ -359,6 +369,7 @@ class SpeechService {
         'ar-LB': 'Google العربية',
         'fr-FR': 'Google français',
         'en-US': 'Google US English',
+        'kn-IN': 'Google ಕನ್ನಡ',
       };
       selected = voices.find((v) => v.name.includes(googleMap[language])) ?? null;
     }
@@ -372,10 +383,14 @@ class SpeechService {
 
     // Pitch & rate per language
     const isMale = selected?.name
-      ? /male|thomas|nicolas|jean|ahmed|ali|naayf/i.test(selected.name)
+      ? /male|thomas|nicolas|jean|ahmed|ali|naayf|gagan/i.test(selected.name)
       : false;
 
     switch (language) {
+      case 'kn-IN':
+        utterance.pitch = isMale ? 1.0 : 1.05;
+        utterance.rate = 0.92;
+        break;
       case 'ar-LB':
         utterance.pitch = isMale ? 1.3 : 1.1;
         utterance.rate = 0.95;

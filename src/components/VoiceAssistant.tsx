@@ -14,16 +14,39 @@ import useNetworkQuality from '../hooks/useNetworkQuality';
 // Language display names and flags
 const LANGUAGE_DISPLAY: Record<SupportedLanguage, { name: string; flag: string }> = {
   'en-US': { name: 'English', flag: '🇺🇸' },
+  'kn-IN': { name: 'ಕನ್ನಡ (Kannada)', flag: '🇮🇳' },
   'ar-LB': { name: 'Arabic', flag: '🇱🇧' },
   'fr-FR': { name: 'French', flag: '🇫🇷' },
 };
 
 // Shared error messages (used by both voice and text paths)
 const ERROR_MESSAGES: Record<SupportedLanguage, string> = {
+  'kn-IN': 'ಕ್ಷಮಿಸಿ, ದೋಷ ಸಂಭವಿಸಿದೆ. ದಯವಿಟ್ಟು ಮತ್ತೆ ಪ್ರಯತ್ನಿಸಿ.',
   'ar-LB': 'عذراً، حصل خطأ في المعالجة. الرجاء المحاولة مرة أخرى.',
   'fr-FR': "Désolé, une erreur s'est produite. Veuillez réessayer.",
   'en-US': 'Sorry, there was an error. Please try again.',
 };
+
+// Time-appropriate greeting (text only, no auto-speak)
+function getTimeBasedGreeting(lang: SupportedLanguage = 'en-US'): string {
+  const hour = new Date().getHours();
+  if (lang === 'kn-IN') {
+    if (hour >= 5 && hour < 12) return "ಶುಭೋದಯ. ನಾನು ನೋವಾ, ನಿಮ್ಮ ಧ್ವನಿ ಸಹಾಯಕ.";
+    if (hour >= 12 && hour < 17) return "ಶುಭ ಅಪರಾಹ್ನ. ನಾನು ನೋವಾ, ನಿಮ್ಮ ಧ್ವನಿ ಸಹಾಯಕ.";
+    return "ಶುಭ ಸಂಜೆ. ನಾನು ನೋವಾ, ನಿಮ್ಮ ಧ್ವನಿ ಸಹಾಯಕ.";
+  }
+  if (lang === 'ar-LB') {
+    if (hour >= 5 && hour < 12) return "صباح الخير. أنا نوفا، مساعدك الصوتي.";
+    return "مساء الخير. أنا نوفا، مساعدك الصوتي.";
+  }
+  if (lang === 'fr-FR') {
+    if (hour >= 5 && hour < 18) return "Bonjour. Je suis Nova, votre assistant vocal.";
+    return "Bonsoir. Je suis Nova, votre assistant vocal.";
+  }
+  if (hour >= 5 && hour < 12) return "Good morning. I'm Nova, your voice assistant.";
+  if (hour >= 12 && hour < 17) return "Good afternoon. I'm Nova, your voice assistant.";
+  return "Good evening. I'm Nova, your voice assistant.";
+}
 
 export interface Message {
   role: 'user' | 'assistant';
@@ -71,14 +94,6 @@ const VoiceAssistant: React.FC = () => {
   useEffect(() => {
     saveMessages(messages);
   }, [messages]);
-
-  // Time-appropriate greeting (text only, no auto-speak)
-  const getTimeBasedGreeting = (): string => {
-    const hour = new Date().getHours();
-    if (hour >= 5 && hour < 12) return "Good morning. I'm Nova, your voice assistant.";
-    if (hour >= 12 && hour < 17) return "Good afternoon. I'm Nova, your voice assistant.";
-    return "Good evening. I'm Nova, your voice assistant.";
-  };
 
   // Update favicon when blob state changes
   const updateBlobState = useCallback((newState: BlobState) => {
@@ -576,7 +591,6 @@ const VoiceAssistant: React.FC = () => {
       SpeechService.stopSpeaking();
       SpeechService.stopWakeWordListening();
     };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); // mount-only — uses refs for mutable values
 
   // Subscribe to language changes via event (no monkey-patching)
@@ -647,8 +661,12 @@ const VoiceAssistant: React.FC = () => {
     setCurrentLanguage(language);
     setShowLanguageMenu(false);
 
+    const newGreeting = getTimeBasedGreeting(language);
+    setGreetingText(newGreeting);
+
     const confirmations: Record<SupportedLanguage, string> = {
       'en-US': 'Switched to English',
+      'kn-IN': 'ಕನ್ನಡಕ್ಕೆ ಬದಲಾಯಿಸಲಾಗಿದೆ',
       'ar-LB': 'تم التحويل إلى اللغة العربية',
       'fr-FR': 'Passé au français',
     };
@@ -788,6 +806,7 @@ const VoiceAssistant: React.FC = () => {
             value={textInput}
             onChange={(e) => setTextInput(e.target.value)}
             placeholder={
+              currentLanguage === 'kn-IN' ? 'ನಿಮ್ಮ ಸಂದೇಶವನ್ನು ಟೈಪ್ ಮಾಡಿ...' :
               currentLanguage === 'ar-LB' ? 'اكتب رسالتك...' :
               currentLanguage === 'fr-FR' ? 'Tapez votre message...' :
               'Type your message...'

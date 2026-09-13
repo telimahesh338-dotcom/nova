@@ -1,0 +1,10 @@
+{
+  "name": "Nova",
+  "description": "Voice Assistant Powered by AI",
+  "requestFramePermissions": [
+    "microphone"
+  ],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
